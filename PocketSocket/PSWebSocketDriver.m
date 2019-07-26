@@ -19,8 +19,10 @@
 #import "PSWebSocketBuffer.h"
 #import "PSWebSocketUTF8Decoder.h"
 #import "PSWebSocketInternal.h"
-#if TARGET_OS_IPHONE
+#if TARGET_OS_IPHONE && !TARGET_OS_UIKITFORMAC
 #import <Endian.h>
+#else
+#import <CoreServices/CoreServices.h>
 #endif
 #import <CommonCrypto/CommonCrypto.h>
 

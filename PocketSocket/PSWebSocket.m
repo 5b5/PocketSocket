@@ -76,7 +76,7 @@
 - (PSWebSocketReadyState)readyState {
     __block PSWebSocketReadyState value = 0;
     [self executeWorkAndWait:^{
-        value = _readyState;
+        value = self->_readyState;
     }];
     return value;
 }
@@ -188,12 +188,12 @@
 
 - (void)open {
     [self executeWork:^{
-        if(_opened || _readyState != PSWebSocketReadyStateConnecting) {
+        if(self->_opened || self->_readyState != PSWebSocketReadyStateConnecting) {
             [NSException raise:@"Invalid State" format:@"You cannot open a PSWebSocket more than once."];
             return;
         }
         
-        _opened = YES;
+        self->_opened = YES;
         
         // connect
         [self connect];
@@ -203,9 +203,9 @@
     NSParameterAssert(message);
     [self executeWork:^{
         if([message isKindOfClass:[NSString class]]) {
-            [_driver sendText:message];
+            [self->_driver sendText:message];
         } else if([message isKindOfClass:[NSData class]]) {
-            [_driver sendBinary:message];
+            [self->_driver sendBinary:message];
         } else {
             [NSException raise:@"Invalid Message" format:@"Messages must be instances of NSString or NSData"];
         }
@@ -214,9 +214,9 @@
 - (void)ping:(NSData *)pingData handler:(void (^)(NSData *pongData))handler {
     [self executeWork:^{
         if(handler) {
-            [_pingHandlers addObject:handler];
+            [self->_pingHandlers addObject:handler];
         }
-        [_driver sendPing:pingData];
+        [self->_driver sendPing:pingData];
     }];
 }
 - (void)close {
@@ -225,17 +225,17 @@
 - (void)closeWithCode:(NSInteger)code reason:(NSString *)reason {
     [self executeWork:^{
         // already closing so lets exit
-        if(_readyState >= PSWebSocketReadyStateClosing) {
+        if(self->_readyState >= PSWebSocketReadyStateClosing) {
             return;
         }
         
-        BOOL connecting = (_readyState == PSWebSocketReadyStateConnecting);
-        _readyState = PSWebSocketReadyStateClosing;
+        BOOL connecting = (self->_readyState == PSWebSocketReadyStateConnecting);
+        self->_readyState = PSWebSocketReadyStateClosing;
         
         // send close code if we're not connecting
         if(!connecting) {
-            _closeCode = code;
-            [_driver sendCloseCode:code reason:reason];
+            self->_closeCode = code;
+            [self->_driver sendCloseCode:code reason:reason];
         }
         
         // disconnect gracefully
@@ -262,17 +262,17 @@
 - (CFTypeRef)copyStreamPropertyForKey:(NSString *)key {
     __block CFTypeRef result;
     [self executeWorkAndWait:^{
-        result = CFWriteStreamCopyProperty((__bridge CFWriteStreamRef)_outputStream, (__bridge CFStringRef)key);
+        result = CFWriteStreamCopyProperty((__bridge CFWriteStreamRef)self->_outputStream, (__bridge CFStringRef)key);
     }];
     return result;
 }
 - (void)setStreamProperty:(CFTypeRef)property forKey:(NSString *)key {
     [self executeWorkAndWait:^{
-        if(_opened || _readyState != PSWebSocketReadyStateConnecting) {
+        if(self->_opened || self->_readyState != PSWebSocketReadyStateConnecting) {
             [NSException raise:@"Invalid State" format:@"You cannot set stream properties on a PSWebSocket once it is opened."];
             return;
         }
-        CFWriteStreamSetProperty((__bridge CFWriteStreamRef)_outputStream, (__bridge CFStringRef)key, (CFTypeRef)property);
+        CFWriteStreamSetProperty((__bridge CFWriteStreamRef)self->_outputStream, (__bridge CFStringRef)key, (CFTypeRef)property);
     }];
 }
 
@@ -424,7 +424,7 @@
            !_outputBuffer.hasBytesAvailable &&
            [_delegate respondsToSelector: @selector(webSocketIsHungry:)]) {
             [self executeDelegate:^{
-                [_delegate webSocketIsHungry: self];
+                [self->_delegate webSocketIsHungry: self];
             }];
         }
     } while (_outputStream.hasSpaceAvailable && _outputBuffer.hasBytesAvailable);
@@ -434,15 +434,15 @@
 - (BOOL) readPaused {
     __block BOOL result;
     [self executeWorkAndWait: ^{
-        result = _readPaused;
+        result = self->_readPaused;
     }];
     return result;
 }
 
 - (void) setReadPaused: (BOOL)paused {
     [self executeWork: ^{
-        if (paused != _readPaused) {
-            _readPaused = paused;
+        if (paused != self->_readPaused) {
+            self->_readPaused = paused;
             if (!paused)
                 [self pumpInput];
         }
@@ -457,18 +457,18 @@
 - (void)failWithError:(NSError *)error {
     if(error.code == PSWebSocketStatusCodeProtocolError && [error.domain isEqualToString:PSWebSocketErrorDomain]) {
         [self executeDelegate:^{
-            _closeCode = error.code;
-            _closeReason = error.localizedDescription;
-            [self closeWithCode:_closeCode reason:_closeReason];
+            self->_closeCode = error.code;
+            self->_closeReason = error.localizedDescription;
+            [self closeWithCode:self->_closeCode reason:self->_closeReason];
             [self executeWork:^{
                 [self disconnectGracefully];
             }];
         }];
     } else {
         [self executeWork:^{
-            if(_readyState != PSWebSocketReadyStateClosed) {
-                _failed = YES;
-                _readyState = PSWebSocketReadyStateClosed;
+            if(self->_readyState != PSWebSocketReadyStateClosed) {
+                self->_failed = YES;
+                self->_readyState = PSWebSocketReadyStateClosed;
                 [self notifyDelegateDidFailWithError:error];
                 [self disconnectGracefully];
             }
@@ -589,22 +589,22 @@
 
 - (void)notifyDelegateDidOpen {
     [self executeDelegate:^{
-        [_delegate webSocketDidOpen:self];
+        [self->_delegate webSocketDidOpen:self];
     }];
 }
 - (void)notifyDelegateDidReceiveMessage:(id)message {
     [self executeDelegate:^{
-        [_delegate webSocket:self didReceiveMessage:message];
+        [self->_delegate webSocket:self didReceiveMessage:message];
     }];
 }
 - (void)notifyDelegateDidFailWithError:(NSError *)error {
     [self executeDelegate:^{
-        [_delegate webSocket:self didFailWithError:error];
+        [self->_delegate webSocket:self didFailWithError:error];
     }];
 }
 - (void)notifyDelegateDidCloseWithCode:(NSInteger)code reason:(NSString *)reason wasClean:(BOOL)wasClean {
     [self executeDelegate:^{
-        [_delegate webSocket:self didCloseWithCode:code reason:reason wasClean:wasClean];
+        [self->_delegate webSocket:self didCloseWithCode:code reason:reason wasClean:wasClean];
     }];
 }
 
@@ -615,15 +615,15 @@
     NSAssert(trust != nil, @"Couldn't get SSL trust");
     CFRetain(trust);
     [self executeDelegate:^{
-        BOOL ok = [_delegate webSocket: self validateServerTrust: trust];
+        BOOL ok = [self->_delegate webSocket: self validateServerTrust: trust];
         CFRelease(trust);
         [self executeWork:^{
             if (ok) {
-                _serverUnvalidated = NO;
+                self->_serverUnvalidated = NO;
                 [self pumpOutput];
                 [self pumpInput];
             } else {
-                NSDictionary* userInfo = @{NSURLErrorFailingURLStringErrorKey: _request.URL.absoluteString};
+                NSDictionary* userInfo = @{NSURLErrorFailingURLStringErrorKey: self->_request.URL.absoluteString};
                 NSError* error = [NSError errorWithDomain: NSURLErrorDomain
                                                      code: NSURLErrorServerCertificateUntrusted
                                                  userInfo: userInfo];
